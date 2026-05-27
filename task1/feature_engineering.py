@@ -217,25 +217,6 @@ def add_resnet_pca(n_components: float | int = 0.95, resnet_csv: str = "resnet_f
 
     The raw resnet_* columns are replaced in feature_cols by the PCA
     projection columns (resnet_pca_0, resnet_pca_1, ...).
-
-    Parameters
-    ----------
-    n_components : passed directly to sklearn PCA.
-                   - float in (0, 1): keep enough components for that fraction
-                     of explained variance (e.g. 0.95 → ~250–400 components).
-                   - int ≥ 1: keep exactly that many components.
-                   Default 0.95 (retains 95% of variance).
-    resnet_csv   : path to resnet_features_hf.csv (only used if resnet_*
-                   columns are not already present in merged_df).
-
-    Rationale
-    ---------
-    The 2,048-d ResNet embedding contains significant redundancy — many
-    components encode correlated mid-level features. PCA decorrelates the
-    space, removes noise dimensions, and cuts the feature count by ~5–8×,
-    which substantially speeds up downstream classifiers (especially SVM)
-    without sacrificing accuracy (in practice, accuracy improves slightly
-    because the noise components are discarded).
     """
     state: dict = {"scaler": None, "pca": None}
 
@@ -282,11 +263,16 @@ def add_resnet_pca(n_components: float | int = 0.95, resnet_csv: str = "resnet_f
             n_kept   = X_pca.shape[1]
             print(f"  [add_resnet_pca] PCA applied: {n_kept} components")
 
-        # Write PCA columns back into the DataFrame
+        # --- OPTIMIZED BULK INSERTION (Fixes PerformanceWarning) ---
         merged_df = merged_df.copy()
         pca_col_names = [f"resnet_pca_{i}" for i in range(n_kept)]
-        for i, col in enumerate(pca_col_names):
-            merged_df[col] = X_pca[:, i]
+        
+        # Create a single temporary DataFrame holding all PCA columns at once
+        pca_df = pd.DataFrame(X_pca, columns=pca_col_names, index=merged_df.index)
+        
+        # Concat horizontally in a single step
+        merged_df = pd.concat([merged_df, pca_df], axis=1)
+        # -----------------------------------------------------------
 
         # Replace raw resnet_* cols with pca cols in the active feature list
         non_resnet_cols = [c for c in feature_cols if not c.startswith("resnet_")]
