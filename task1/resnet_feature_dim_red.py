@@ -1,10 +1,11 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
 # ==========================================================
@@ -74,3 +75,40 @@ svm_kbest = SVC(kernel='linear')
 svm_kbest.fit(X_train_kbest, y_train)
 kbest_preds = svm_kbest.predict(X_val_kbest)
 print(f"SVM Accuracy with SelectKBest ({k_features} features): {accuracy_score(y_val, kbest_preds):.4f}")
+
+# ==========================================================
+# 4. FINAL HYPERPARAMETER TUNING FOR LOGISTIC REGRESSION
+# ==========================================================
+print("\n" + "="*50)
+print("RUNNING FINAL LOGISTIC REGRESSION GRID SEARCH")
+print("="*50)
+
+from sklearn.pipeline import Pipeline
+
+# Create a pipeline that combines PCA and Logistic Regression
+# This lets us test different PCA sizes and C values at the exact same time!
+pipe = Pipeline([
+    ('pca', PCA(random_state=42)),
+    ('lr', LogisticRegression(max_iter=1000, random_state=42))
+])
+
+# Define the grid of parameters we want to test
+# We will test preserving different amounts of components vs regularization strengths
+pipe_param_grid = {
+    'pca__n_components': [300, 500, 700, 900, 1108],
+    'lr__C': [0.01, 0.1, 1.0, 10.0]
+}
+
+# Run the grid search
+print("Searching for the perfect combination of PCA components and C penalty...")
+lr_grid = GridSearchCV(pipe, pipe_param_grid, cv=3, n_jobs=-1, verbose=1)
+lr_grid.fit(X_train_scaled, y_train)
+
+print(f"\nBest Configuration Found:")
+print(f"- Optimal PCA Components: {lr_grid.best_params_['pca__n_components']}")
+print(f"- Optimal Logistic Regression C: {lr_grid.best_params_['lr__C']}")
+
+# Evaluate the winning combination on your validation data
+best_pipe_preds = lr_grid.predict(X_val_scaled)
+final_accuracy = accuracy_score(y_val, best_pipe_preds)
+print(f"\nFinal Optimized Accuracy: {final_accuracy:.4f}")
