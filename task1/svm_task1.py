@@ -114,11 +114,12 @@ def run():
     # 2. Build feature matrices, split, and preprocess
     datasets = get_datasets(
         raw,
-        feature_selector=resnet_combined_selector,
+        feature_selector= combined_selector,
         preprocessor=PREPROCESSOR,
         val_size=VAL_SIZE,
         random_state=RANDOM_STATE,
     )
+    
 
     X_train      = datasets["X_train"]
     y_train      = datasets["y_train"]
