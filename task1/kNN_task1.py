@@ -1,14 +1,37 @@
 """
-model_knn.py
+kNN_task1.py
 ------------
 k-Nearest Neighbours classifier for Task 1.
 
 Depends on:
-  data_feature_pre.data_loader.py          - data loading, merging, splitting, preprocessing
-  data_feature_pre.feature_engineering.py  - feature selectors / engineering pipelines
+  data_loader.py          - data loading, merging, splitting, preprocessing
+  feature_engineering.py  - feature selectors / engineering pipelines
 
-To change the feature set, swap out the `feature_selector` argument in
-get_datasets(). All available selectors are defined in feature_engineering.py.
+Feature selection rationale for kNN
+-------------------------------------
+kNN is a distance-based algorithm — every feature dimension contributes to the
+distance calculation equally (after scaling).  This makes it uniquely sensitive
+to two problems:
+
+  1. Curse of dimensionality: in high-dimensional spaces, distance measures
+     become uninformative because all points become approximately equidistant.
+     Raw ResNet embeddings are 2,048-d; the provided features are 219-d.
+     Combining them naively gives ~2,267 dimensions, which degrades kNN.
+
+  2. Irrelevant / correlated features: features that carry no class signal
+     still add noise to every distance computation.
+
+Strategy: use ResNet PCA only (resnet_only_pca).
+  - PCA decorrelates the embedding space, removing redundant axes.
+  - 95% variance retention collapses 2,048 dims to ~250-400 orthogonal components.
+  - Hand-crafted features (HOG, colour, additional) are deliberately excluded:
+    they are largely redundant with the ResNet embedding and add noisy dimensions.
+  - The Preprocessor StandardScaler normalises the PCA components so that no
+    single component dominates the Euclidean distance.
+
+If you want to experiment with including hand-crafted features, swap
+ACTIVE_SELECTOR to resnet_anova_selector (ResNet PCA + ANOVA top-150), which
+at least filters out the weakest hand-crafted dimensions before combining.
 """
 
 import pandas as pd
@@ -17,26 +40,48 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score, classification_report
 
 from data_loader import load_raw_data, get_datasets, Preprocessor
-from feature_engineering import combined_selector   # swap this to experiment
+from feature_engineering import make_resnet_selector
 
 
 # ---------------------------------------------------------------------------
-# Configuration — change these to experiment
+# Configuration
 # ---------------------------------------------------------------------------
 
-DATA_DIR          = "task1_data"
-VAL_SIZE          = 0.2
-RANDOM_STATE      = 42
-SUBMISSION_FILE   = "knn_submission.csv"
+DATA_DIR        = "task1_data"
+VAL_SIZE        = 0.2
+RANDOM_STATE    = 42
+SUBMISSION_FILE = "knn_submission.csv"
 
-# Preprocessor: StandardScaler is required for kNN (distance-based).
-# pca_components=None keeps the full feature set after selection;
-# set to e.g. 0.95 to retain 95% variance via PCA.
+# ResNet CSV paths
+RESNET_TRAIN_CSV = "resnet_features_hf.csv"
+RESNET_TEST_CSV  = "resnet_features_test.csv"
+
+# Feature selector: ResNet PCA only — no hand-crafted features.
+# Rationale: kNN degrades with irrelevant/correlated dimensions.  PCA-compressed
+# ResNet embeddings give a compact, decorrelated, semantically rich feature space
+# that is ideal for distance-based methods.
+# Swap to include_handcrafted=True to ablate the effect of adding hand-crafted features.
+ACTIVE_SELECTOR = make_resnet_selector(
+    train_csv=RESNET_TRAIN_CSV,
+    test_csv=RESNET_TEST_CSV,
+    n_components=0.95,        # keep 95% of ResNet embedding variance (~250-400 dims)
+    k_best=200,               # only used when include_handcrafted=True
+    include_handcrafted=False,
+)
+
+# StandardScaler is mandatory for kNN — distances are not scale-invariant.
+# pca_components=None: dimensionality reduction is already handled by the
+# feature selector's add_resnet_pca step; a second PCA here would be redundant.
 PREPROCESSOR = Preprocessor(
     scaler_type="standard",
     pca_components=None,
 )
 
+# Hyperparameter grid
+# n_neighbors: odd values avoid ties; range covers local (3) to more global (15)
+# weights:     "distance" downweights far neighbours — tends to help on image data
+# metric:      euclidean is standard in PCA space (orthonormal axes);
+#              manhattan can outperform on high-d data (less sensitive to outliers)
 PARAM_GRID = {
     "n_neighbors": [3, 5, 7, 11, 15],
     "weights":     ["uniform", "distance"],
@@ -52,10 +97,12 @@ def run():
     # 1. Load CSVs once
     raw = load_raw_data(DATA_DIR)
 
-    # 2. Build feature matrices, split, and preprocess
+    # 2. Build feature matrices, split, and preprocess.
+    #    Training matrix is built first so the stateful ResNet PCA selector
+    #    is fitted before it is applied to the test set.
     datasets = get_datasets(
         raw,
-        feature_selector=combined_selector,
+        feature_selector=ACTIVE_SELECTOR,
         preprocessor=PREPROCESSOR,
         val_size=VAL_SIZE,
         random_state=RANDOM_STATE,
