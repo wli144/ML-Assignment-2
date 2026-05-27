@@ -62,25 +62,6 @@ Why Random Forest for Task 2
    which are useful for understanding which ResNet channels (or hand-crafted
    features) drive species predictions.
 
-Suggested models for Task 2 (for report discussion)
------------------------------------------------------
-1. Random Forest (this file) — strong baseline with ResNet; interpretable
-2. Gradient Boosting (XGBoost / LightGBM) — sequential correction of errors;
-   typically outperforms Random Forest on tabular features at the cost of
-   longer training and more hyperparameters
-3. SVM with RBF kernel + ResNet-PCA — SVMs generalise well in high-dimensional
-   spaces; ResNet-PCA reduces to ~200d first; suitable when training set is small
-4. k-NN with cosine distance on ResNet features — ResNet embedding space is
-   approximately metric; cosine similarity is more appropriate than Euclidean
-   for high-dimensional dense activations
-5. MLP (sklearn MLPClassifier) — can learn non-linear combinations of ResNet
-   channels; more flexible than SVM but needs careful regularisation
-6. Soft Voting Ensemble (RF + SVM + kNN) — averages class probability
-   estimates; often outperforms any single model when base models have
-   complementary error patterns
-7. Stacking Ensemble — trains a meta-classifier on out-of-fold predictions
-   from base classifiers; more powerful than voting but risks overfitting
-   on small datasets
 """
 
 import os
