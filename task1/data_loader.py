@@ -239,7 +239,9 @@ def get_datasets(raw: dict,
     if preprocessor is None:
         preprocessor = Preprocessor(scaler_type="standard")
 
-    # Build matrices
+    # Build matrices — training MUST come first so that any stateful feature
+    # selector (e.g. add_resnet_pca, select_k_best_*) is fitted before it is
+    # applied to the test set with is_train=False.
     print("\n--- Building training feature matrix ---")
     X_full, y_full, feature_cols = build_feature_matrix(
         raw, feature_selector=feature_selector, is_train=True
@@ -251,6 +253,18 @@ def get_datasets(raw: dict,
         raw, feature_selector=feature_selector, is_train=False
     )
     print(f"  Test matrix shape: {X_test_raw.shape}")
+
+    # Guard: mismatched column counts mean the selector produced different
+    # feature sets for train and test — usually caused by the test CSV missing
+    # some columns or a stateful selector not being fitted yet.
+    if X_full.shape[1] != X_test_raw.shape[1]:
+        raise ValueError(
+            f"Feature count mismatch: training has {X_full.shape[1]} columns "
+            f"but test has {X_test_raw.shape[1]} columns. "
+            "Check that your feature_selector produces identical columns for "
+            "train and test, and that all required CSVs (including "
+            "resnet_features_test.csv) are present."
+        )
 
     # Train / val split
     X_train_raw, X_val_raw, y_train, y_val = train_test_split(
