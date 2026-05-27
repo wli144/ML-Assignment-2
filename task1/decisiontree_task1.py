@@ -23,6 +23,8 @@ from sklearn.metrics import accuracy_score, classification_report
 
 from data_loader import load_raw_data, get_datasets, Preprocessor
 from feature_engineering import combined_selector   # swap this to experiment
+from feature_engineering import resnet_combined_selector   # swap this to experiment
+
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +63,7 @@ def run():
     # 2. Build feature matrices, split, and preprocess
     datasets = get_datasets(
         raw,
-        feature_selector=combined_selector,
+        feature_selector=resnet_combined_selector,   # swap this to experiment
         preprocessor=PREPROCESSOR,
         val_size=VAL_SIZE,
         random_state=RANDOM_STATE,
