@@ -41,8 +41,8 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score, classification_report
 
-from data_loader import load_raw_data, get_datasets, Preprocessor
-from feature_engineering import make_resnet_selector
+from task2.data_loader import load_raw_data, get_datasets, Preprocessor
+from task2.feature_engineering import make_resnet_selector
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ RESNET_TEST_CSV  = "resnet_features_test.csv"
 # Note: make_resnet_selector with include_handcrafted=True uses add_resnet_pca
 # internally. To keep raw ResNet features for the tree (no PCA), we build the
 # selector manually here using compose + merge_resnet_features + select_k_best_anova.
-from feature_engineering import (
+from task2.feature_engineering import (
     compose,
     all_features,
     add_color_channel_ratios,
