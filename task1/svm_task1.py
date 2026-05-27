@@ -74,7 +74,7 @@ SVM_CONFIGURATIONS = [
         "Linear",
         "linear",
         {"C": [0.01, 0.1, 1, 10, 100]},
-        "svm_linear_submission.csv",
+        "submission_results/svm_linear_submission.csv",
     ),
     (
         "RBF",
@@ -86,7 +86,7 @@ SVM_CONFIGURATIONS = [
             'gamma': [0.0005, 0.001, 0.003, 0.005, 0.01]
         },
         
-        "svm_rbf_submission.csv",
+        "submission_results/svm_rbf_submission.csv",
     ),
 ]
 

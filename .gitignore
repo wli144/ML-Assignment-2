@@ -1,2 +1,5 @@
 task1_data/
 task2_data/
+submission_results/
+resnet_feautres_hf.csv
+resnet_feautres_hf_test.csv

@@ -52,7 +52,7 @@ from feature_engineering import make_resnet_selector
 DATA_DIR        = "task1_data"
 VAL_SIZE        = 0.2
 RANDOM_STATE    = 42
-SUBMISSION_FILE = "decision_tree_submission.csv"
+SUBMISSION_FILE = "submission_results/decision_tree_submission.csv"
 
 # ResNet CSV paths
 RESNET_TRAIN_CSV = "resnet_features_hf.csv"
