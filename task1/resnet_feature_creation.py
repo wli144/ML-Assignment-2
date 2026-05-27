@@ -7,6 +7,7 @@ import os
 # 1. Load the metadata and setup paths
 metadata = pd.read_csv('task1_data/train_metadata.csv')
 img_dir = 'task1_data/'
+
 # 2. Load a pre-trained model and its matching image processor from online
 # This automatically downloads a powerful ResNet-50 model trained on ImageNet
 model_name = "microsoft/resnet-50"

@@ -12,21 +12,23 @@ from sklearn.metrics import accuracy_score
 # ==========================================================
 print("Loading datasets...")
 # Load the original labels and your newly engineered ResNet features
-metadata = pd.read_csv('train_metadata.csv')
-features_df = pd.read_csv('resnet_features_train.csv')
+metadata = pd.read_csv('task1_data/train_metadata.csv')
+features_df = pd.read_csv('resnet_features_hf.csv')
 
-# Merge them together on the image path to ensure perfect alignment
+# Merge them together on the shared image path
 merged_df = pd.merge(metadata, features_df, on='image_path')
 
-# Separate into features (X) and target labels (y)
-# Adjust 'label' or 'class_id' to match your metadata column names
+# 1. Target labels (y): Use the numeric class_id
 y = merged_df['class_id'] 
-X = merged_df.drop(columns=['image_path', 'class_name', 'class_id'], errors='ignore')
 
-# Split into Training and Validation sets (80% train, 20% val)
+# 2. Features (X): Explicitly drop all metadata columns 
+# This leaves ONLY the 2,048 ResNet numerical feature columns
+X = merged_df.drop(columns=['image_id', 'image_path', 'class_id', 'class_name'])
+
+# Split into Training and Validation sets
 X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Standardize features (Crucial before performing PCA!)
+# Standardize features
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_val_scaled = scaler.transform(X_val)
