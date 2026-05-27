@@ -34,8 +34,8 @@ from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score, classification_report
 
-from data_loader import load_raw_data, get_datasets, Preprocessor
-from feature_engineering import combined_selector, make_resnet_selector
+from task2.data_loader import load_raw_data, get_datasets, Preprocessor
+from task2.feature_engineering import combined_selector, make_resnet_selector
 
 
 # ---------------------------------------------------------------------------

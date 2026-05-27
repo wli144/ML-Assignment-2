@@ -36,23 +36,13 @@ by monotonic feature transformations (scaling).  StandardScaler is still applied
 here for pipeline consistency, but has zero effect on tree behaviour or accuracy.
 """
 
-import os
-import sys
-
-# --- FIX: Tell Python to look in the parent folder for imports ---
-# This grabs the folder above the current script and adds it to Python's search path
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
-
-
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score, classification_report
 
-from data_loader import load_raw_data, get_datasets, Preprocessor
-from feature_engineering import make_resnet_selector
+from task2.data_loader import load_raw_data, get_datasets, Preprocessor
+from task2.feature_engineering import make_resnet_selector
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +67,7 @@ RESNET_TEST_CSV  = "resnet_features_test.csv"
 # Note: make_resnet_selector with include_handcrafted=True uses add_resnet_pca
 # internally. To keep raw ResNet features for the tree (no PCA), we build the
 # selector manually here using compose + merge_resnet_features + select_k_best_anova.
-from feature_engineering import (
+from task2.feature_engineering import (
     compose,
     all_features,
     add_color_channel_ratios,
