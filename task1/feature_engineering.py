@@ -11,6 +11,10 @@ Column prefixes in the actual data
   color_histogram.csv      ->  color_0 .. color_95       (96 columns)
                                                    Total: 219 features
 
+  resnet_features_hf.csv   ->  0 .. 2047              (2048 columns)
+  (ResNet-50 pooler_output embeddings, prefixed as 'resnet_' after loading)
+                                                   Total with ResNet: 2267 features
+
 A feature selector is any callable with this signature:
 
     def my_selector(merged_df, feature_cols, is_train=True):
@@ -20,18 +24,92 @@ The merged_df is the full DataFrame after the metadata/feature join.
 feature_cols is the current list of active feature column names.
 Return the (possibly modified) df and the updated feature_cols list.
 
+ResNet features are loaded separately via load_resnet_features() and merged
+into the DataFrame before any selector is applied. Dimensionality reduction
+on ResNet features is handled by add_resnet_pca(), which must be called
+during training and will reuse the fitted PCA on val/test.
+
 Usage example
 -------------
     from data_loader import load_raw_data, get_datasets
-    from feature_engineering import combined_selector
+    from feature_engineering import combined_selector, resnet_combined_selector
 
     raw      = load_raw_data("task1_data")
     datasets = get_datasets(raw, feature_selector=combined_selector)
+
+    # With ResNet features (requires resnet_features_hf.csv):
+    datasets = get_datasets(raw, feature_selector=resnet_combined_selector)
 """
 
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif
+from sklearn.preprocessing import StandardScaler
+
+
+# ---------------------------------------------------------------------------
+# ResNet feature loading
+# ---------------------------------------------------------------------------
+
+def load_resnet_features(resnet_csv: str = "resnet_features_hf.csv") -> pd.DataFrame:
+    """
+    Load the ResNet-50 pooler_output embeddings saved by resnet_feature_creation.py.
+
+    The CSV is expected to have an 'image_path' column followed by 2,048
+    numeric columns (named 0..2047 by default). Column names are prefixed
+    with 'resnet_' so they don't collide with the provided feature columns.
+
+    Parameters
+    ----------
+    resnet_csv : path to the ResNet feature CSV
+
+    Returns
+    -------
+    DataFrame with columns ['image_path', 'resnet_0', ..., 'resnet_2047']
+    """
+    df = pd.read_csv(resnet_csv)
+    # Rename numeric columns to resnet_0 .. resnet_2047
+    feat_cols = [c for c in df.columns if c != "image_path"]
+    rename_map = {c: f"resnet_{c}" for c in feat_cols}
+    df = df.rename(columns=rename_map)
+    return df
+
+
+def merge_resnet_features(
+    merged_df: pd.DataFrame,
+    feature_cols: list,
+    resnet_csv: str = "resnet_features_hf.csv",
+) -> tuple:
+    """
+    Load ResNet features from CSV and left-join them onto merged_df by
+    'image_path'. Adds the resnet_* column names to feature_cols.
+
+    Call this once before passing the DataFrame to any selector pipeline
+    that includes add_resnet_pca() or resnet_only().
+
+    Parameters
+    ----------
+    merged_df    : the full merged DataFrame (metadata + provided features)
+    feature_cols : current list of active feature column names
+    resnet_csv   : path to resnet_features_hf.csv
+
+    Returns
+    -------
+    (merged_df, feature_cols) with ResNet columns appended
+    """
+    resnet_df = load_resnet_features(resnet_csv)
+    resnet_feat_cols = [c for c in resnet_df.columns if c != "image_path"]
+
+    merged_df = merged_df.copy()
+    merged_df = merged_df.merge(resnet_df, on="image_path", how="left")
+
+    # Fill any unmatched rows with 0 (shouldn't happen in normal usage)
+    merged_df[resnet_feat_cols] = merged_df[resnet_feat_cols].fillna(0.0)
+
+    print(f"  [merge_resnet_features] Merged {len(resnet_feat_cols)} ResNet columns "
+          f"from '{resnet_csv}'")
+    return merged_df, feature_cols + resnet_feat_cols
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +182,117 @@ def all_features(merged_df, feature_cols, is_train=True):
     """
     print(f"  [all_features] {len(feature_cols)} features retained")
     return merged_df, feature_cols
+
+
+# ---------------------------------------------------------------------------
+# 1b. ResNet feature group isolator and dimensionality reduction
+#     These require merge_resnet_features() to have been called first so
+#     that resnet_* columns are present in merged_df.
+# ---------------------------------------------------------------------------
+
+def resnet_only(merged_df, feature_cols, is_train=True):
+    """
+    Retain only the 2,048 ResNet-50 pooler_output embedding features
+    (resnet_0 .. resnet_2047), dropping all hand-crafted features.
+
+    ResNet-50 was pre-trained on ImageNet and produces a rich semantic
+    embedding of the image that encodes object parts, textures, and colour
+    in a single 2,048-d vector. These embeddings substantially outperform
+    hand-crafted features for both coarse and fine-grained tasks.
+
+    When to use: ablation to isolate the contribution of deep features;
+    or as the sole feature source before add_resnet_pca().
+    """
+    selected = _cols_by_prefix(feature_cols, "resnet_")
+    print(f"  [resnet_only] {len(selected)} / {len(feature_cols)} features retained")
+    return merged_df, selected
+
+
+def add_resnet_pca(n_components: float | int = 0.95, resnet_csv: str = "resnet_features_hf.csv"):
+    """
+    Return a stateful selector that:
+      1. On the training set: loads + merges ResNet features, standardises
+         them, fits PCA, and projects down to n_components.
+      2. On val/test: applies the same scaler and fitted PCA transform.
+
+    The raw resnet_* columns are replaced in feature_cols by the PCA
+    projection columns (resnet_pca_0, resnet_pca_1, ...).
+
+    Parameters
+    ----------
+    n_components : passed directly to sklearn PCA.
+                   - float in (0, 1): keep enough components for that fraction
+                     of explained variance (e.g. 0.95 → ~250–400 components).
+                   - int ≥ 1: keep exactly that many components.
+                   Default 0.95 (retains 95% of variance).
+    resnet_csv   : path to resnet_features_hf.csv (only used if resnet_*
+                   columns are not already present in merged_df).
+
+    Rationale
+    ---------
+    The 2,048-d ResNet embedding contains significant redundancy — many
+    components encode correlated mid-level features. PCA decorrelates the
+    space, removes noise dimensions, and cuts the feature count by ~5–8×,
+    which substantially speeds up downstream classifiers (especially SVM)
+    without sacrificing accuracy (in practice, accuracy improves slightly
+    because the noise components are discarded).
+    """
+    state: dict = {"scaler": None, "pca": None}
+
+    def _apply(merged_df, feature_cols, is_train=True):
+        # If ResNet columns are missing, merge them in first
+        resnet_cols = _cols_by_prefix(feature_cols, "resnet_")
+        if not resnet_cols:
+            print("  [add_resnet_pca] No resnet_ columns found; "
+                  f"attempting to merge from '{resnet_csv}'")
+            merged_df, feature_cols = merge_resnet_features(
+                merged_df, feature_cols, resnet_csv=resnet_csv
+            )
+            resnet_cols = _cols_by_prefix(feature_cols, "resnet_")
+
+        if not resnet_cols:
+            print("  [add_resnet_pca] Still no resnet_ columns; skipping PCA")
+            return merged_df, feature_cols
+
+        X_resnet = merged_df[resnet_cols].values.astype(float)
+
+        if is_train:
+            # Fit scaler + PCA on training data only
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X_resnet)
+
+            pca = PCA(n_components=n_components, random_state=42)
+            X_pca = pca.fit_transform(X_scaled)
+
+            state["scaler"] = scaler
+            state["pca"]    = pca
+
+            n_kept = X_pca.shape[1]
+            var_explained = pca.explained_variance_ratio_.sum()
+            print(f"  [add_resnet_pca] PCA fitted: {n_kept} components "
+                  f"({var_explained:.1%} variance explained) "
+                  f"from {len(resnet_cols)} ResNet features")
+        else:
+            if state["scaler"] is None or state["pca"] is None:
+                raise RuntimeError(
+                    "[add_resnet_pca] PCA not fitted. Run on training data first."
+                )
+            X_scaled = state["scaler"].transform(X_resnet)
+            X_pca    = state["pca"].transform(X_scaled)
+            n_kept   = X_pca.shape[1]
+            print(f"  [add_resnet_pca] PCA applied: {n_kept} components")
+
+        # Write PCA columns back into the DataFrame
+        merged_df = merged_df.copy()
+        pca_col_names = [f"resnet_pca_{i}" for i in range(n_kept)]
+        for i, col in enumerate(pca_col_names):
+            merged_df[col] = X_pca[:, i]
+
+        # Replace raw resnet_* cols with pca cols in the active feature list
+        non_resnet_cols = [c for c in feature_cols if not c.startswith("resnet_")]
+        return merged_df, non_resnet_cols + pca_col_names
+
+    return _apply
 
 
 # ---------------------------------------------------------------------------
@@ -512,4 +701,42 @@ color_with_stats = compose(
     add_color_channel_ratios,
     add_color_histogram_stats,
     select_k_best_anova(k=50),
+)
+
+
+# --- ResNet-based configurations ---
+# These require resnet_features_hf.csv (produced by resnet_feature_creation.py).
+# The PCA step is stateful — the fitted transform is reused on val/test
+# automatically via the is_train flag inside add_resnet_pca().
+
+# ResNet-50 embeddings with PCA (95% variance retained, ~250–400 components).
+# Best single-source configuration; use as the primary feature set for SVM/kNN.
+resnet_pca = add_resnet_pca(n_components=0.95)
+
+# ResNet PCA only, no hand-crafted features.
+# Useful for isolating deep-feature contribution in ablations.
+resnet_only_pca = compose(
+    resnet_only,
+    add_resnet_pca(n_components=0.95),
+)
+
+# ResNet PCA + all 219 hand-crafted features, then mutual-info selection.
+# Combines deep and shallow representations. The SelectKBest step prunes
+# redundant dimensions from the combined ~400–700 d space.
+resnet_combined_selector = compose(
+    all_features,
+    add_color_channel_ratios,
+    add_color_histogram_stats,
+    add_hog_statistics,
+    add_feat_statistics,
+    add_resnet_pca(n_components=0.95),       # merges + reduces ResNet cols
+    select_k_best_mutual_info(k=200),        # prune from combined feature space
+)
+
+# Lightweight version: ResNet PCA + ANOVA top-150.
+# Faster to train; good starting point when compute is limited.
+resnet_anova_selector = compose(
+    all_features,
+    add_resnet_pca(n_components=0.95),
+    select_k_best_anova(k=150),
 )
