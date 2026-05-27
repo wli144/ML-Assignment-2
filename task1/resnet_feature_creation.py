@@ -5,8 +5,8 @@ from transformers import AutoImageProcessor, AutoModel
 import os
 
 # 1. Load the metadata and setup paths
-metadata = pd.read_csv('task1_data/test_metadata.csv')
-img_dir = 'task1_data/'
+metadata = pd.read_csv('task2_data/test_metadata.csv')
+img_dir = 'task2_data/'
 
 # 2. Load a pre-trained model and its matching image processor from online
 # This automatically downloads a powerful ResNet-50 model trained on ImageNet
@@ -42,6 +42,6 @@ for idx, row in metadata.iterrows():
 # 4. Save to CSV directly
 df_features = pd.DataFrame(features)
 df_features.insert(0, 'image_path', metadata['image_path'])
-df_features.to_csv('resnet_features_test.csv', index=False)
+df_features.to_csv('resnet_features_test2.csv', index=False)
 
-print("Done! Features saved to resnet_features_test.csv")
+print("Done! Features saved to resnet_features_test2.csv")
