@@ -46,9 +46,12 @@ SVM_CONFIGURATIONS = [
         "RBF",
         "rbf",
         {
-            "C":     [0.1, 1, 10, 100],
-            "gamma": ["scale", "auto", 0.001, 0.01],
+            #"C":     [0.1, 1, 10, 100],
+            #"gamma": ["scale", "auto", 0.001, 0.01],
+            'C': [5, 10, 50, 100],
+            'gamma': [0.0005, 0.001, 0.003, 0.005, 0.01]
         },
+        
         "svm_rbf_submission.csv",
     ),
 ]

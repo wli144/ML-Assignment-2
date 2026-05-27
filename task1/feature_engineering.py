@@ -453,6 +453,7 @@ def compose(*selectors):
     return _composed
 
 
+
 # ---------------------------------------------------------------------------
 # 5. Named ready-to-use configurations
 # ---------------------------------------------------------------------------
@@ -485,7 +486,7 @@ with_engineering = compose(
 # Balances expressiveness with dimensionality. Good starting point for
 # SVM (RBF) and kNN where feature count affects runtime.
 combined_selector = compose(
-    all_features,
+    #all_features,
     add_color_channel_ratios,
     add_color_histogram_stats,
     add_hog_statistics,
