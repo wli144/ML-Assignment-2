@@ -208,26 +208,55 @@ def resnet_only(merged_df, feature_cols, is_train=True):
     return merged_df, selected
 
 
-def add_resnet_pca(n_components: float | int = 0.95, resnet_csv: str = "resnet_features_hf.csv"):
+def add_resnet_pca(
+    n_components: float | int = 0.95,
+    resnet_csv: str = "resnet_features_hf.csv",
+    test_csv: str = "resnet_features_test.csv",
+):
     """
     Return a stateful selector that:
-      1. On the training set: loads + merges ResNet features, standardises
-         them, fits PCA, and projects down to n_components.
-      2. On val/test: applies the same scaler and fitted PCA transform.
+      1. On the training set (is_train=True): loads + merges ResNet features
+         from resnet_csv, standardises them, fits PCA, and projects down to
+         n_components.
+      2. On val/test (is_train=False): loads ResNet features from test_csv
+         (if resnet_* columns are not already present), then applies the same
+         scaler and fitted PCA transform from step 1.
 
     The raw resnet_* columns are replaced in feature_cols by the PCA
     projection columns (resnet_pca_0, resnet_pca_1, ...).
+
+    Parameters
+    ----------
+    n_components : passed directly to sklearn PCA.
+                   - float in (0, 1): keep enough components for that fraction
+                     of explained variance (e.g. 0.95 → ~250–400 components).
+                   - int ≥ 1: keep exactly that many components.
+                   Default 0.95 (retains 95% of variance).
+    resnet_csv   : path to resnet_features_hf.csv (only used if resnet_*
+                   columns are not already present in merged_df).
+
+    Rationale
+    ---------
+    The 2,048-d ResNet embedding contains significant redundancy — many
+    components encode correlated mid-level features. PCA decorrelates the
+    space, removes noise dimensions, and cuts the feature count by ~5–8×,
+    which substantially speeds up downstream classifiers (especially SVM)
+    without sacrificing accuracy (in practice, accuracy improves slightly
+    because the noise components are discarded).
     """
     state: dict = {"scaler": None, "pca": None}
 
     def _apply(merged_df, feature_cols, is_train=True):
-        # If ResNet columns are missing, merge them in first
+        # Pick which CSV to fall back to when resnet_* cols are absent
+        csv_to_load = resnet_csv if is_train else test_csv
+
+        # If ResNet columns are missing, merge them in from the right CSV
         resnet_cols = _cols_by_prefix(feature_cols, "resnet_")
         if not resnet_cols:
             print("  [add_resnet_pca] No resnet_ columns found; "
-                  f"attempting to merge from '{resnet_csv}'")
+                  f"attempting to merge from '{csv_to_load}'")
             merged_df, feature_cols = merge_resnet_features(
-                merged_df, feature_cols, resnet_csv=resnet_csv
+                merged_df, feature_cols, resnet_csv=csv_to_load
             )
             resnet_cols = _cols_by_prefix(feature_cols, "resnet_")
 
@@ -691,19 +720,76 @@ color_with_stats = compose(
 
 
 # --- ResNet-based configurations ---
-# These require resnet_features_hf.csv (produced by resnet_feature_creation.py).
-# The PCA step is stateful — the fitted transform is reused on val/test
+# These require resnet_features_hf.csv (train) and resnet_features_test.csv (test),
+# both produced by resnet_feature_creation.py.
+# The PCA step is stateful — the scaler+PCA fitted on train is reused on val/test
 # automatically via the is_train flag inside add_resnet_pca().
+#
+# IMPORTANT: all named selectors below use the default CSV paths:
+#   train : resnet_features_hf.csv
+#   test  : resnet_features_test.csv
+# If your files live elsewhere, call make_resnet_selector() with custom paths.
+
+_RESNET_TRAIN_CSV = "resnet_features_hf.csv"
+_RESNET_TEST_CSV  = "resnet_features_test.csv"
+
+
+def make_resnet_selector(
+    train_csv: str = _RESNET_TRAIN_CSV,
+    test_csv:  str = _RESNET_TEST_CSV,
+    n_components: float | int = 0.95,
+    k_best: int = 200,
+    include_handcrafted: bool = True,
+):
+    """
+    Factory that returns a resnet_combined_selector-style pipeline with
+    configurable CSV paths.  Use this when your feature CSVs are not in
+    the working directory.
+
+    Parameters
+    ----------
+    train_csv           : path to training ResNet features CSV
+    test_csv            : path to test ResNet features CSV
+    n_components        : PCA variance threshold (float) or exact count (int)
+    k_best              : number of features kept by mutual-info SelectKBest
+    include_handcrafted : if True, combine ResNet PCA with all 219 hand-crafted
+                          features and run SelectKBest; if False, ResNet PCA only
+    """
+    pca_step = add_resnet_pca(
+        n_components=n_components,
+        resnet_csv=train_csv,
+        test_csv=test_csv,
+    )
+    if include_handcrafted:
+        return compose(
+            all_features,
+            add_color_channel_ratios,
+            add_color_histogram_stats,
+            add_hog_statistics,
+            add_feat_statistics,
+            pca_step,
+            select_k_best_mutual_info(k=k_best),
+        )
+    return compose(resnet_only, pca_step)
+
 
 # ResNet-50 embeddings with PCA (95% variance retained, ~250–400 components).
 # Best single-source configuration; use as the primary feature set for SVM/kNN.
-resnet_pca = add_resnet_pca(n_components=0.95)
+resnet_pca = add_resnet_pca(
+    n_components=0.95,
+    resnet_csv=_RESNET_TRAIN_CSV,
+    test_csv=_RESNET_TEST_CSV,
+)
 
 # ResNet PCA only, no hand-crafted features.
 # Useful for isolating deep-feature contribution in ablations.
 resnet_only_pca = compose(
     resnet_only,
-    add_resnet_pca(n_components=0.95),
+    add_resnet_pca(
+        n_components=0.95,
+        resnet_csv=_RESNET_TRAIN_CSV,
+        test_csv=_RESNET_TEST_CSV,
+    ),
 )
 
 # ResNet PCA + all 219 hand-crafted features, then mutual-info selection.
@@ -715,14 +801,22 @@ resnet_combined_selector = compose(
     add_color_histogram_stats,
     add_hog_statistics,
     add_feat_statistics,
-    add_resnet_pca(n_components=0.95),       # merges + reduces ResNet cols
-    select_k_best_mutual_info(k=200),        # prune from combined feature space
+    add_resnet_pca(
+        n_components=0.95,
+        resnet_csv=_RESNET_TRAIN_CSV,
+        test_csv=_RESNET_TEST_CSV,
+    ),
+    select_k_best_mutual_info(k=200),
 )
 
 # Lightweight version: ResNet PCA + ANOVA top-150.
 # Faster to train; good starting point when compute is limited.
 resnet_anova_selector = compose(
     all_features,
-    add_resnet_pca(n_components=0.95),
+    add_resnet_pca(
+        n_components=0.95,
+        resnet_csv=_RESNET_TRAIN_CSV,
+        test_csv=_RESNET_TEST_CSV,
+    ),
     select_k_best_anova(k=150),
 )
