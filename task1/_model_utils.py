@@ -34,6 +34,7 @@ def evaluate(model_name, y_val, y_val_pred, train_meta, best_params=None):
         normalize="true",
         xticks_rotation="vertical",
         ax=ax, colorbar=False,
+        cmap=plt.cm.Blues
     )
     ax.set_title(f"{model_name} — Validation Confusion Matrix (normalised)")
     plt.tight_layout()

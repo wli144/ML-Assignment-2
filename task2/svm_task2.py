@@ -21,15 +21,15 @@ SELECTOR = build_selector(
     resnet_train_csv=RESNET_TRAIN_CSV,
     resnet_test_csv=RESNET_TEST_CSV,
     use_pca=True,
-    pca_k=200,
-    selection_k=150,
+    pca_k=150,
+    selection_k=250,
 )
 
 PREPROCESSOR = Preprocessor(scaler_type="standard")
 
 PARAM_GRID = {
-    "C":     [0.1, 1, 10, 100],
-    "gamma": ["scale", "auto", 0.001],
+    "C": [0.1, 1, 10, 50, 100, 500, 1000],
+    "gamma": ["scale", "auto", 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01]
 }
 
 
@@ -42,7 +42,7 @@ def run():
 
     search = GridSearchCV(
         SVC(kernel="rbf", random_state=RANDOM_STATE, probability=True),
-        PARAM_GRID, cv=5, scoring="accuracy", n_jobs=-1, verbose=1,
+        PARAM_GRID, cv=5, scoring="f1_macro", n_jobs=-1, verbose=1,
     )
     search.fit(ds["X_train"], ds["y_train"])
     print(f"Best params: {search.best_params_}")

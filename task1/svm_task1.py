@@ -18,8 +18,8 @@ SELECTOR = build_selector(
     resnet_train_csv=RESNET_TRAIN_CSV,
     resnet_test_csv=RESNET_TEST_CSV,
     use_pca=True,
-    pca_k=100,
-    selection_k=200,
+    pca_k= 45,
+    selection_k=100,
 )
 
 PREPROCESSOR = Preprocessor(scaler_type="standard")
@@ -27,7 +27,7 @@ PREPROCESSOR = Preprocessor(scaler_type="standard")
 CONFIGS = [
     ("Linear", "linear", {"C": [0.01, 0.1, 1, 10, 100]},
      "svm_linear_task1.csv"),
-    ("RBF",    "rbf",    {"C": [5, 10, 50, 100], "gamma": [0.0005, 0.001, 0.003, 0.005, 0.01]},
+    ("RBF",    "rbf",    {"C": [0.01, 0.1, 1, 5, 10, 50, 100], "gamma": [0.0005, 0.001, 0.003, 0.005, 0.01]},
      "svm_rbf_task1.csv"),
 ]
 
@@ -43,7 +43,7 @@ def run():
     for name, kernel, param_grid, submission_file in CONFIGS:
         print(f"\n{'='*50}\nSVM [{name}]\n{'='*50}")
         search = GridSearchCV(SVC(kernel=kernel, random_state=RANDOM_STATE),
-                              param_grid, cv=5, scoring="accuracy", n_jobs=-1, verbose=1)
+                              param_grid, cv=5, scoring="f1_macro", n_jobs=-1, verbose=1)
         search.fit(ds["X_train"], ds["y_train"])
         print(f"Best params: {search.best_params_}")
 

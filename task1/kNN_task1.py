@@ -21,7 +21,7 @@ SELECTOR = build_selector(
     resnet_test_csv=RESNET_TEST_CSV,
     use_pca=True,
     pca_k=200,
-    selection_k=200,
+    selection_k=25,
 )
 
 PREPROCESSOR = Preprocessor(scaler_type="standard")

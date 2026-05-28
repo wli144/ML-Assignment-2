@@ -23,16 +23,16 @@ SELECTOR = build_selector(
     resnet_train_csv=RESNET_TRAIN_CSV,
     resnet_test_csv=RESNET_TEST_CSV,
     use_pca=False,
-    selection_k=300,
+    selection_k=250,
 )
 
 PREPROCESSOR = Preprocessor(scaler_type=None)
 
 PARAM_DIST = {
-    "n_estimators":      randint(100, 600),
-    "max_depth":         [None, 20, 40],
-    "min_samples_split": randint(2, 12),
-    "min_samples_leaf":  randint(1, 8),
+    "n_estimators":      randint(100, 800),
+    "max_depth":         [None, 20,40,60,80],
+    "min_samples_split": randint(2,12),
+    "min_samples_leaf":  randint(2,12),
     "max_features":      ["sqrt", "log2"],
     "class_weight":      [None, "balanced"],
 }
@@ -47,7 +47,7 @@ def run():
 
     search = RandomizedSearchCV(
         RandomForestClassifier(random_state=RANDOM_STATE, n_jobs=-1),
-        PARAM_DIST, n_iter=N_ITER, cv=5, scoring="accuracy",
+        PARAM_DIST, n_iter=N_ITER, cv=5, scoring="f1_macro",
         random_state=RANDOM_STATE, n_jobs=-1, verbose=1,
     )
     search.fit(ds["X_train"], ds["y_train"])
