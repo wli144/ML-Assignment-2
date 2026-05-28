@@ -212,6 +212,7 @@ def add_resnet_pca(
     n_components: float | int = 0.95,
     resnet_csv: str = "resnet_features_hf.csv",
     test_csv: str = "resnet_features_test.csv",
+    keep_handcrafted: bool = True,
 ):
     """
     Return a stateful selector that:
@@ -234,6 +235,11 @@ def add_resnet_pca(
                    Default 0.95 (retains 95% of variance).
     resnet_csv   : path to resnet_features_hf.csv (only used if resnet_*
                    columns are not already present in merged_df).
+    keep_handcrafted : if True (default), hand-crafted columns already in
+                   feature_cols are retained alongside the PCA components.
+                   if False, ONLY the PCA components are returned — all
+                   non-resnet columns are dropped. Use for kNN/pure-ResNet
+                   pipelines where hand-crafted features add noise.
 
     Rationale
     ---------
@@ -293,19 +299,26 @@ def add_resnet_pca(
             print(f"  [add_resnet_pca] PCA applied: {n_kept} components")
 
         # --- OPTIMIZED BULK INSERTION (Fixes PerformanceWarning) ---
-        merged_df = merged_df.copy()
         pca_col_names = [f"resnet_pca_{i}" for i in range(n_kept)]
-        
+
         # Create a single temporary DataFrame holding all PCA columns at once
         pca_df = pd.DataFrame(X_pca, columns=pca_col_names, index=merged_df.index)
-        
-        # Concat horizontally in a single step
-        merged_df = pd.concat([merged_df, pca_df], axis=1)
+
+        # Drop raw resnet_* cols from the DataFrame (they've been PCA-compressed)
+        # then concat PCA cols — single operation, no fragmentation
+        merged_df = pd.concat(
+            [merged_df.drop(columns=resnet_cols), pca_df], axis=1
+        )
         # -----------------------------------------------------------
 
-        # Replace raw resnet_* cols with pca cols in the active feature list
-        non_resnet_cols = [c for c in feature_cols if not c.startswith("resnet_")]
-        return merged_df, non_resnet_cols + pca_col_names
+        # Build output feature_cols based on keep_handcrafted flag
+        if keep_handcrafted:
+            # Keep existing hand-crafted cols + new PCA cols
+            non_resnet_cols = [c for c in feature_cols if not c.startswith("resnet_")]
+            return merged_df, non_resnet_cols + pca_col_names
+        else:
+            # Return PCA cols only — drop all hand-crafted cols
+            return merged_df, pca_col_names
 
     return _apply
 
@@ -690,7 +703,7 @@ with_engineering = compose(
 # Balances expressiveness with dimensionality. Good starting point for
 # SVM (RBF) and kNN where feature count affects runtime.
 combined_selector = compose(
-    #all_features,
+    all_features,
     add_color_channel_ratios,
     add_color_histogram_stats,
     add_hog_statistics,
@@ -759,6 +772,7 @@ def make_resnet_selector(
         n_components=n_components,
         resnet_csv=train_csv,
         test_csv=test_csv,
+        keep_handcrafted=True,   # hand-crafted cols kept; SelectKBest prunes below
     )
     if include_handcrafted:
         return compose(
@@ -770,7 +784,15 @@ def make_resnet_selector(
             pca_step,
             select_k_best_mutual_info(k=k_best),
         )
-    return compose(resnet_only, pca_step)
+    # keep_handcrafted=False: add_resnet_pca merges, runs PCA, and drops all
+    # non-resnet cols internally. resnet_only must NOT precede this — resnet_*
+    # cols don't exist yet at that point.
+    return add_resnet_pca(
+        n_components=n_components,
+        resnet_csv=train_csv,
+        test_csv=test_csv,
+        keep_handcrafted=False,
+    )
 
 
 # ResNet-50 embeddings with PCA (95% variance retained, ~250–400 components).
@@ -782,14 +804,14 @@ resnet_pca = add_resnet_pca(
 )
 
 # ResNet PCA only, no hand-crafted features.
-# Useful for isolating deep-feature contribution in ablations.
-resnet_only_pca = compose(
-    resnet_only,
-    add_resnet_pca(
-        n_components=0.95,
-        resnet_csv=_RESNET_TRAIN_CSV,
-        test_csv=_RESNET_TEST_CSV,
-    ),
+# keep_handcrafted=False inside add_resnet_pca handles the merge, PCA, and
+# dropping of all non-resnet columns in one step. Do NOT prepend resnet_only
+# here — resnet_* cols don't exist yet when resnet_only would run.
+resnet_only_pca = add_resnet_pca(
+    n_components=0.95,
+    resnet_csv=_RESNET_TRAIN_CSV,
+    test_csv=_RESNET_TEST_CSV,
+    keep_handcrafted=False,
 )
 
 # ResNet PCA + all 219 hand-crafted features, then mutual-info selection.
