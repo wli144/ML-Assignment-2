@@ -27,3 +27,17 @@ Resnet feature csv's
 │   resnet_features_train1.csv
 │   resnet_features_train2.csv
 └── 
+
+
+
+======================================================================
+    Declaration of AI use
+
+    We acknowledge the use of Claude [claude.ai] and Google Gemini to help produce code for this assignment.
+
+    We used it to help structure, develop, and implement code, especially for more difficult and unfamiliar sections, such as those used in Q3. Code to output and format the results were all produced from this tool.
+
+    All parts of the report are written by us, with the use of AI only to consult on specific topics.
+        
+    A full record of prompts and outputs is available upon request.
+======================================================================

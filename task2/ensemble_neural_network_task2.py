@@ -379,29 +379,6 @@ def ensemble_predict(fold_models, X_test):
 
 
 
-def plot_confusion_matrix(y_true, y_pred, class_names, title="Confusion Matrix"):
-    cm      = confusion_matrix(y_true, y_pred)
-    cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
-    fig, ax = plt.subplots(figsize=(10, 8))
-    sns.heatmap(cm_norm, annot=True, fmt=".2f", cmap="Blues",
-                xticklabels=class_names, yticklabels=class_names, ax=ax)
-    ax.set_xlabel("Predicted"); ax.set_ylabel("True"); ax.set_title(title)
-    plt.tight_layout()
-    plt.savefig("task2_confusion_matrix.png", dpi=150)
-    print("Saved confusion matrix → task2_confusion_matrix.png")
-    plt.show()
-
-
-def print_per_class_accuracy(y_true, y_pred, class_names):
-    cm = confusion_matrix(y_true, y_pred)
-    print("\nPer-class accuracy:")
-    for i, name in enumerate(class_names):
-        row_sum = cm[i].sum()
-        acc     = cm[i, i] / row_sum if row_sum > 0 else 0.0
-        print(f"  {str(name):30s}  {acc:.3f}  ({cm[i,i]}/{row_sum})")
-
-
-
 def main():
     # ── Load metadata ──
     train_meta = pd.read_csv(TRAIN_META)
