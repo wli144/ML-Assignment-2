@@ -41,7 +41,7 @@ RESNET_FEATURES_TRAIN = "resnet_features_train2.csv"
 RESNET_FEATURES_TEST  = "resnet_features_test2.csv"
 
 # Output predictions file for Kaggle
-KAGGLE_OUTPUT = "task2_predictions.csv"
+KAGGLE_OUTPUT = "submission_results/task2_neural_predictions.csv"
 
 RANDOM_SEED = 42
 torch.manual_seed(RANDOM_SEED)

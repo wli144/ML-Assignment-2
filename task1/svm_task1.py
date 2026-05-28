@@ -34,8 +34,8 @@ from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score, classification_report
 
-from task2.data_loader import load_raw_data, get_datasets, Preprocessor
-from task2.feature_engineering import combined_selector, make_resnet_selector
+from data_loader import load_raw_data, get_datasets, Preprocessor
+from feature_engineering import combined_selector, make_resnet_selector
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ ACTIVE_SELECTOR = resnet_combined_selector   # swap to combined_selector to abla
 # StandardScaler is required for SVM — do not set scaler_type=None here.
 PREPROCESSOR = Preprocessor(
     scaler_type="standard",
-    pca_components=None,
+    pca_components=100,
 )
 
 # Each entry: (config_name, kernel, param_grid, submission_filename)
