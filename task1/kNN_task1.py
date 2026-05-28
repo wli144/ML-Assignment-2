@@ -11,9 +11,6 @@ RESNET_TEST_CSV  = "resnet_features_test1.csv"
 SUBMISSION_FILE  = "knn_task1.csv"
 RANDOM_STATE     = 42
 
-# ResNet-PCA only: kNN degrades in high dimensions, so raw 2048-d ResNet is
-# compressed to ~200 orthogonal components. Handcrafted features are excluded
-# because they add noisy correlated dimensions that inflate distances.
 # use_pca=True is mandatory here.
 SELECTOR = build_selector(
     mode="resnet",

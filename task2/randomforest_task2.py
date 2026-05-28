@@ -14,10 +14,7 @@ SUBMISSION_FILE  = "randomforest_task2.csv"
 RANDOM_STATE     = 42
 N_ITER           = 60
 
-# Combined raw ResNet + handcrafted, no PCA. Random Forest's random feature
-# subsampling at each split (max_features="sqrt") provides implicit selection,
-# making it robust to the 2048 ResNet dimensions. No PCA preserves axis-aligned
-# splits on individual ResNet filter channels.
+# Combined raw ResNet + handcrafted, no PCA.
 SELECTOR = build_selector(
     mode="combined",
     resnet_train_csv=RESNET_TRAIN_CSV,

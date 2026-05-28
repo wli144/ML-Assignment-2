@@ -11,9 +11,7 @@ RESNET_TEST_CSV  = "resnet_features_test1.csv"
 SUBMISSION_FILE  = "decisiontree_task1.csv"
 RANDOM_STATE     = 42
 
-# Combined raw ResNet + handcrafted, no PCA. Trees split on individual feature
-# thresholds, so axis alignment matters — PCA rotations destroy interpretability.
-# ANOVA selection reduces 2267 dims to 150 most discriminative individual axes.
+# Combined raw ResNet + handcrafted, no PCA. 
 SELECTOR = build_selector(
     mode="combined",
     resnet_train_csv=RESNET_TRAIN_CSV,

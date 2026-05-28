@@ -12,7 +12,6 @@ RANDOM_STATE     = 42
 
 # ResNet-PCA + handcrafted, scaled. StandardScaler is mandatory for SVM.
 # use_pca=True compresses 2048-d ResNet before combining with handcrafted
-# features; this keeps RBF kernel computation tractable.
 SELECTOR = build_selector(
     mode="combined",
     resnet_train_csv=RESNET_TRAIN_CSV,

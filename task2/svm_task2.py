@@ -11,11 +11,6 @@ RESNET_TEST_CSV  = "resnet_features_test2.csv"
 SUBMISSION_FILE  = "svm_task2.csv"
 RANDOM_STATE     = 42
 
-# RBF only. After PCA compression to 200 dims, the class boundaries in the
-# ResNet embedding space are curved — RBF consistently outperforms linear
-# in this regime. Linear SVM is only competitive on the raw 2048-d space
-# where Cover's theorem gives it an advantage, but that space is intractable
-# for RBF. See svm_task1.py for a full linear vs. RBF comparison.
 SELECTOR = build_selector(
     mode="combined",
     resnet_train_csv=RESNET_TRAIN_CSV,
