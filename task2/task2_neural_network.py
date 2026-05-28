@@ -24,6 +24,10 @@ import itertools
 
 from transformers import AutoImageProcessor, AutoModel
 
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'task1'))
+from _model_utils import evaluate as mu_evaluate
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 0.  PATHS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -359,11 +363,12 @@ def plot_confusion_matrix(y_true, y_pred, class_names, title="Confusion Matrix")
     plt.show()
 
 
-def final_cv_report(X, y, best_cfg: dict, n_classes: int, class_names):
+def final_cv_report(X, y, best_cfg: dict, n_classes: int, class_names, train_meta):
     """
     Runs one more stratified k-fold with the best config to get a reliable
     validation accuracy estimate for the report, and plots a confusion matrix.
     """
+    _train_meta_for_report = train_meta
     skf = StratifiedKFold(n_splits=N_CV_FOLDS, shuffle=True, random_state=RANDOM_SEED)
     all_preds, all_labels = [], []
 
@@ -399,10 +404,16 @@ def final_cv_report(X, y, best_cfg: dict, n_classes: int, class_names):
         all_preds.extend(best_state[0])
         all_labels.extend(best_state[1])
 
-    overall_acc = accuracy_score(all_labels, all_preds)
-    print(f"\n✓ Final cross-validated accuracy (best config): {overall_acc:.4f}")
-    plot_confusion_matrix(all_labels, all_preds, class_names,
-                          title=f"Task 2 CV Confusion Matrix (acc={overall_acc:.3f})")
+    # Remap encoded indices (0-9) back to original class_ids so _model_utils
+    # can look up class names from train_metadata correctly
+    le_tmp = LabelEncoder().fit(_train_meta_for_report["class_id"].values)
+    all_labels_mapped = le_tmp.inverse_transform(all_labels)
+    all_preds_mapped  = le_tmp.inverse_transform(all_preds)
+    overall_acc = mu_evaluate(
+        "Neural Network (Ensemble)",
+        all_labels_mapped, all_preds_mapped,
+        train_meta=_train_meta_for_report,
+    )
     return overall_acc
 
 
@@ -441,7 +452,7 @@ def main():
 
     # ── 8e. Cross-val report with best config (for the written report) ──
     print("\n=== Final CV accuracy report ===")
-    final_cv_report(X_train, y_train, best_cfg, n_classes, class_names)
+    final_cv_report(X_train, y_train, best_cfg, n_classes, class_names, train_meta)
 
     # ── 8f. Train final model on all training data ──
     final_model, final_scaler = train_final_model(X_train, y_train, best_cfg, n_classes)
