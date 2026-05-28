@@ -19,6 +19,8 @@ import itertools
 
 from transformers import AutoImageProcessor, AutoModel
 
+from _model_utils import evaluate, save_submission
+
 TASK2_DIR  = "task2_data/"
 TRAIN_META = os.path.join(TASK2_DIR, "train_metadata.csv")
 TEST_META  = os.path.join(TASK2_DIR, "test_metadata.csv")
@@ -28,7 +30,7 @@ RESNET_FEATURES_TRAIN = "resnet_features_train2.csv"
 RESNET_FEATURES_TEST  = "resnet_features_test2.csv"
 
 # Output predictions file for Kaggle
-KAGGLE_OUTPUT = "task2_predictions.csv"
+KAGGLE_OUTPUT = "task2_NN_ensemble_predictions.csv"
 
 RANDOM_SEED = 42
 torch.manual_seed(RANDOM_SEED)
@@ -436,8 +438,23 @@ def main():
     cv_f1  = f1_score(cv_labels, cv_preds, average="macro", zero_division=0)
     print(f"\n✓ Ensemble CV accuracy: {cv_acc:.4f}  |  macro-F1: {cv_f1:.4f}")
     print_per_class_accuracy(cv_labels, cv_preds, class_names)
-    plot_confusion_matrix(cv_labels, cv_preds, class_names,
-                          title=f"Task 2 Ensemble CV Confusion Matrix (acc={cv_acc:.3f}, F1={cv_f1:.3f})")
+
+    # Confusion matrix via _model_utils (saves to submission_results/)
+    evaluate(
+        model_name="Task 2 Ensemble NN",
+        y_val=cv_labels,
+        y_val_pred=cv_preds,
+        train_meta=train_meta,
+    )
+
+    # Full per-class metrics: precision, recall, F1, support
+    from sklearn.metrics import classification_report
+    print("\nDetailed per-class metrics (ensemble CV predictions):")
+    print(classification_report(
+        cv_labels, cv_preds,
+        target_names=[str(c) for c in class_names],
+        zero_division=0,
+    ))
 
     # ── Predict on test set using ensemble soft-voting ──
     print("\nGenerating test predictions via ensemble soft-voting …")
